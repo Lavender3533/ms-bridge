@@ -5,9 +5,9 @@ set -u
 DIR=/mnt/workspace/ms-bridge
 mkdir -p "$DIR"
 fetch() {  # fetch FILE -> $DIR/FILE from a mirror reachable inside mainland China
-  for base in https://fastly.jsdelivr.net/gh/Lavender3533/ms-bridge@main \
-              https://cdn.jsdelivr.net/gh/Lavender3533/ms-bridge@main \
-              https://ghfast.top/https://raw.githubusercontent.com/Lavender3533/ms-bridge/main; do
+  for base in https://fastly.jsdelivr.net/gh/Lavender3533/ms-bridge@1942cfe \
+              https://cdn.jsdelivr.net/gh/Lavender3533/ms-bridge@1942cfe \
+              https://ghfast.top/https://raw.githubusercontent.com/Lavender3533/ms-bridge/1942cfe; do
     curl -fsSL -m 30 "$base/$1" -o "$DIR/$1.tmp" && mv "$DIR/$1.tmp" "$DIR/$1" && return 0
   done
   return 1
@@ -15,7 +15,7 @@ fetch() {  # fetch FILE -> $DIR/FILE from a mirror reachable inside mainland Chi
 echo "[0/3] downloading tunnel client ..."
 fetch bore_client.py || { echo "FAILED: cannot download bore_client.py"; exit 1; }
 PORT_LOCAL=2222
-PORT_PUBLIC=47219
+PORT_PUBLIC=52819
 PUBKEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKVFfGNlsy9RMu4YAowwiWew/KuvDSPIiA09ApWs8ZTG Kangnaixi@Kangnaixi'
 STATE="$DIR/state"
 mkdir -p "$STATE"
@@ -64,7 +64,7 @@ done
 echo "[3/3] result:"
 if grep -q "TUNNEL READY" "$STATE/tunnel.log"; then
   nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || echo "no NVIDIA GPU visible"
-  echo "OK - tunnel is up. You can leave this terminal; the connection keeps running in the background."
+  grep "TUNNEL READY" "$STATE/tunnel.log" | tail -1; echo "OK - tunnel is up. You can leave this terminal; the connection keeps running in the background."
 else
   echo "FAILED: tunnel did not come up:"; tail -5 "$STATE/tunnel.log"
   exit 1
