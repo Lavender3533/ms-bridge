@@ -58,17 +58,17 @@ pkill -f "cpolar tcp $PORT_LOCAL" 2>/dev/null || true
 sleep 1
 nohup "$CP" tcp "$PORT_LOCAL" -log=stdout > "$STATE/cpolar.log" 2>&1 &
 for _ in $(seq 1 40); do
-  grep -q "tcp://" "$STATE/cpolar.log" && break
+  grep -o 'tcp://[^ "\]*' "$STATE/cpolar.log" | grep -qvE '127\.0\.0\.1|localhost' && break
   sleep 1
 done
 
 echo "[3/3] result:"
-ADDR=$(grep -o 'tcp://[^ "]*' "$STATE/cpolar.log" | tail -1)
+ADDR=$(grep -o 'tcp://[^ "\]*' "$STATE/cpolar.log" | grep -vE '127\.0\.0\.1|localhost' | tail -1)
 if [ -n "$ADDR" ]; then
   nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || echo "no NVIDIA GPU visible"
   echo "ADDRESS: $ADDR"
   echo "OK - send the ADDRESS line to Claude. You can leave this terminal."
 else
-  echo "FAILED: cpolar did not report an address:"; tail -8 "$STATE/cpolar.log"
+  echo "FAILED: cpolar did not report an address:"; grep -iE "tcp://|error|fail|auth" "$STATE/cpolar.log" | tail -8
   exit 1
 fi
