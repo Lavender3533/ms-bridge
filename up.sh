@@ -2,7 +2,18 @@
 # Open an SSH door into this ModelScope instance through the public bore.pub relay.
 # Key-only login (password login disabled); sshd listens on 127.0.0.1 only.
 set -u
-DIR="$(cd "$(dirname "$0")" && pwd)"
+DIR=/mnt/workspace/ms-bridge
+mkdir -p "$DIR"
+fetch() {  # fetch FILE -> $DIR/FILE from a mirror reachable inside mainland China
+  for base in https://fastly.jsdelivr.net/gh/Lavender3533/ms-bridge@main \
+              https://cdn.jsdelivr.net/gh/Lavender3533/ms-bridge@main \
+              https://ghfast.top/https://raw.githubusercontent.com/Lavender3533/ms-bridge/main; do
+    curl -fsSL -m 30 "$base/$1" -o "$DIR/$1.tmp" && mv "$DIR/$1.tmp" "$DIR/$1" && return 0
+  done
+  return 1
+}
+echo "[0/3] downloading tunnel client ..."
+fetch bore_client.py || { echo "FAILED: cannot download bore_client.py"; exit 1; }
 PORT_LOCAL=2222
 PORT_PUBLIC=47219
 PUBKEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKVFfGNlsy9RMu4YAowwiWew/KuvDSPIiA09ApWs8ZTG Kangnaixi@Kangnaixi'
@@ -11,13 +22,11 @@ mkdir -p "$STATE"
 
 echo "[1/3] sshd ..."
 if ! command -v sshd >/dev/null 2>&1 && [ ! -x /usr/sbin/sshd ]; then
+  echo "      installing openssh-server (about 1 minute) ..."
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq >/dev/null 2>&1 || true
-  if ! apt-get install -y -qq openssh-server >/dev/null 2>&1; then
-    sed -i -E 's#https?://[^/ ]+/(ubuntu|debian)#http://mirrors.aliyun.com/\1#' /etc/apt/sources.list 2>/dev/null
-    apt-get update -qq >/dev/null 2>&1
-    apt-get install -y -qq openssh-server >/dev/null 2>&1 || { echo "FAILED: cannot install openssh-server"; exit 1; }
-  fi
+  sed -i -E 's#https?://[^/ ]+/(ubuntu|debian)#http://mirrors.aliyun.com/\1#' /etc/apt/sources.list 2>/dev/null
+  timeout 180 apt-get update -qq >/dev/null 2>&1 || true
+  timeout 300 apt-get install -y -qq openssh-server >/dev/null 2>&1 || { echo "FAILED: cannot install openssh-server"; exit 1; }
 fi
 SSHD="$(command -v sshd || echo /usr/sbin/sshd)"
 
@@ -45,7 +54,7 @@ fi
 "$SSHD" -f "$STATE/sshd_config" || { echo "FAILED: sshd did not start"; exit 1; }
 
 echo "[2/3] tunnel ..."
-pkill -f "bore_client.py $PORT_LOCAL" 2>/dev/null
+pkill -f "bore_client.py $PORT_LOCAL" 2>/dev/null || true
 nohup python3 "$DIR/bore_client.py" "$PORT_LOCAL" "$PORT_PUBLIC" > "$STATE/tunnel.log" 2>&1 &
 for _ in $(seq 1 30); do
   grep -q "TUNNEL READY" "$STATE/tunnel.log" && break
