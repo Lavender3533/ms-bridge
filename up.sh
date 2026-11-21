@@ -5,9 +5,9 @@ set -u
 DIR=/mnt/workspace/ms-bridge
 mkdir -p "$DIR"
 fetch() {  # fetch FILE -> $DIR/FILE from a mirror reachable inside mainland China
-  for base in https://fastly.jsdelivr.net/gh/Lavender3533/ms-bridge@1942cfe \
-              https://cdn.jsdelivr.net/gh/Lavender3533/ms-bridge@1942cfe \
-              https://ghfast.top/https://raw.githubusercontent.com/Lavender3533/ms-bridge/1942cfe; do
+  for base in https://fastly.jsdelivr.net/gh/Lavender3533/ms-bridge@d47e560 \
+              https://cdn.jsdelivr.net/gh/Lavender3533/ms-bridge@d47e560 \
+              https://ghfast.top/https://raw.githubusercontent.com/Lavender3533/ms-bridge/d47e560; do
     curl -fsSL -m 30 "$base/$1" -o "$DIR/$1.tmp" && mv "$DIR/$1.tmp" "$DIR/$1" && return 0
   done
   return 1
@@ -64,7 +64,20 @@ done
 echo "[3/3] result:"
 if grep -q "TUNNEL READY" "$STATE/tunnel.log"; then
   nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || echo "no NVIDIA GPU visible"
-  grep "TUNNEL READY" "$STATE/tunnel.log" | tail -1; echo "OK - tunnel is up. You can leave this terminal; the connection keeps running in the background."
+  grep "TUNNEL READY" "$STATE/tunnel.log" | tail -1
+  echo "      self-test through the relay (20s) ..."
+  sleep 15
+  P=$(grep -o 'bore.pub:[0-9]*' "$STATE/tunnel.log" | tail -1 | cut -d: -f2)
+  python3 - "$P" <<'PY'
+import socket, sys
+try:
+    s = socket.create_connection(("bore.pub", int(sys.argv[1])), 10); s.settimeout(15)
+    print("      self-test:", s.recv(64).decode(errors="replace").strip() or "EMPTY")
+except Exception as e:
+    print("      self-test FAILED:", e)
+PY
+  tail -4 "$STATE/tunnel.log"
+  echo "OK - tunnel is up. You can leave this terminal; the connection keeps running in the background."
 else
   echo "FAILED: tunnel did not come up:"; tail -5 "$STATE/tunnel.log"
   exit 1
