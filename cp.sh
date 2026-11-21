@@ -54,9 +54,12 @@ fi
 if [ -n "$TOKEN" ]; then
   "$CP" authtoken "$TOKEN" >/dev/null || { echo "FAILED: authtoken rejected"; exit 1; }
 fi
+pkill -f "cpolar-keepalive" 2>/dev/null || true
 pkill -f "cpolar tcp $PORT_LOCAL" 2>/dev/null || true
 sleep 1
-nohup "$CP" tcp "$PORT_LOCAL" -log=stdout > "$STATE/cpolar.log" 2>&1 &
+: > "$STATE/cpolar.log"
+# fully detached from the terminal, restarted if it ever exits
+setsid nohup bash -c "exec -a cpolar-keepalive bash -c 'while true; do \"$CP\" tcp $PORT_LOCAL -log=stdout >> \"$STATE/cpolar.log\" 2>&1; sleep 5; done'" > /dev/null 2>&1 < /dev/null &
 for _ in $(seq 1 40); do
   grep -o 'tcp://[^ "\]*' "$STATE/cpolar.log" | grep -qvE '127\.0\.0\.1|localhost' && break
   sleep 1
