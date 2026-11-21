@@ -67,6 +67,8 @@ def run(local_port, remote_port, server):
     reply = recv_msg(ctl, buf)
     if isinstance(reply, dict) and "Hello" in reply:
         print(f"TUNNEL READY {server}:{reply['Hello']}", flush=True)
+    elif isinstance(reply, dict) and "port already in use" in str(reply.get("Error", "")):
+        raise PortTaken()
     else:
         raise ConnectionError(f"unexpected reply: {reply}")
     while True:
@@ -78,16 +80,27 @@ def run(local_port, remote_port, server):
             raise ConnectionError(msg["Error"])
 
 
+class PortTaken(Exception):
+    pass
+
+
 def main():
     local_port = int(sys.argv[1])
-    remote_port = int(sys.argv[2])
+    first_port = int(sys.argv[2])
     server = sys.argv[3] if len(sys.argv) > 3 else "bore.pub"
+    candidates = list(range(first_port, first_port + 20))
+    i = 0
     while True:
+        port = candidates[i % len(candidates)]
         try:
-            run(local_port, remote_port, server)
+            run(local_port, port, server)
+        except PortTaken:
+            print(f"port {port} taken, trying next", flush=True)
+            i += 1
+            continue
         except Exception as e:  # keep the tunnel alive across network hiccups
             print("tunnel down:", e, "- retrying in 5s", flush=True)
-            time.sleep(5)
+        time.sleep(5)
 
 
 if __name__ == "__main__":
