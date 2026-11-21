@@ -71,13 +71,27 @@ def run(local_port, remote_port, server):
         raise PortTaken()
     else:
         raise ConnectionError(f"unexpected reply: {reply}")
-    while True:
-        msg = recv_msg(ctl, buf)
-        if isinstance(msg, dict) and "Connection" in msg:
-            threading.Thread(target=handle, args=(server, msg["Connection"], local_port),
-                             daemon=True).start()
-        elif isinstance(msg, dict) and "Error" in msg:
-            raise ConnectionError(msg["Error"])
+    ctl.settimeout(15)
+    beats, last_report = 0, time.time()
+    try:
+        while True:
+            try:
+                msg = recv_msg(ctl, buf)
+            except socket.timeout:
+                raise ConnectionError("no heartbeat from server for 15s (connection silently dropped)")
+            if isinstance(msg, dict) and "Connection" in msg:
+                print("incoming connection", flush=True)
+                threading.Thread(target=handle, args=(server, msg["Connection"], local_port),
+                                 daemon=True).start()
+            elif isinstance(msg, dict) and "Error" in msg:
+                raise ConnectionError(msg["Error"])
+            else:
+                beats += 1
+            if time.time() - last_report > 300:
+                print(f"alive, {beats} heartbeats", flush=True)
+                last_report = time.time()
+    finally:
+        ctl.close()
 
 
 class PortTaken(Exception):
